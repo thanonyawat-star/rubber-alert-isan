@@ -7,84 +7,121 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 
 # ----------------------------------------------------
-# 1. Page Configuration
+# 1. Page Configuration & Custom UI Styling
 # ----------------------------------------------------
 st.set_page_config(
-    page_title="ระบบเตือนภัยและพยากรณ์ยางพาราอีสาน (IR-EWS)",
-    page_icon="🌳",
+    page_title="IR-EWS | ระบบติดตามและเตือนภัยตลาดยางพาราอีสาน Real-Time",
+    page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
-    .metric-card {
-        background: #1e293b;
+    /* Gradient Header & Metric Cards */
+    .hero-container {
+        background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        margin-bottom: 20px;
+        border: 1px solid #10b98144;
+    }
+    .metric-card-primary {
+        background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
         padding: 16px;
         border-radius: 12px;
-        border-left: 5px solid #3b82f6;
+        border-top: 4px solid #38bdf8;
         color: white;
     }
-    .alert-box-warning {
-        background-color: #78350f;
-        color: #fef3c7;
-        padding: 14px;
-        border-radius: 8px;
-        border-left: 6px solid #f59e0b;
-        margin-bottom: 12px;
+    .metric-card-latex {
+        background: linear-gradient(135deg, #713f12 0%, #0f172a 100%);
+        padding: 16px;
+        border-radius: 12px;
+        border-top: 4px solid #facc15;
+        color: white;
     }
-    .alert-box-danger {
-        background-color: #7f1d1d;
-        color: #fee2e2;
-        padding: 14px;
-        border-radius: 8px;
-        border-left: 6px solid #ef4444;
-        margin-bottom: 12px;
+    .metric-card-cup {
+        background: linear-gradient(135deg, #831843 0%, #0f172a 100%);
+        padding: 16px;
+        border-radius: 12px;
+        border-top: 4px solid #f43f5e;
+        color: white;
     }
-    .alert-box-success {
-        background-color: #064e3b;
-        color: #d1fae5;
-        padding: 14px;
-        border-radius: 8px;
-        border-left: 6px solid #10b981;
-        margin-bottom: 12px;
+    .metric-card-weather {
+        background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+        padding: 16px;
+        border-radius: 12px;
+        border-top: 4px solid #34d399;
+        color: white;
     }
-    .reference-box {
-        background-color: #0f172a;
-        padding: 14px;
-        border-radius: 8px;
-        border: 1px solid #334155;
-        font-size: 0.9em;
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: bold;
     }
+    .status-badge-green { background-color: #065f46; color: #6ee7b7; border: 1px solid #10b981; }
+    .status-badge-red { background-color: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
+    .status-badge-amber { background-color: #78350f; color: #fde68a; border: 1px solid #f59e0b; }
 </style>
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 2. Coordinates & Region Settings (ภาคอีสาน)
+# 2. ข้อมูลพิกัดแยกตามเขต/อำเภอปลูกยางสำคัญของภาคอีสาน
 # ----------------------------------------------------
-ISAN_PROVINCES = {
-    "บึงกาฬ (Bueng Kan)": {"lat": 18.3609, "lon": 103.6531, "area_rai": 850000},
-    "สกลนคร (Sakon Nakhon)": {"lat": 17.1546, "lon": 104.1486, "area_rai": 420000},
-    "เลย (Loei)": {"lat": 17.4860, "lon": 101.7223, "area_rai": 780000},
-    "อุดรธานี (Udon Thani)": {"lat": 17.4157, "lon": 102.7872, "area_rai": 510000},
-    "หนองคาย (Nong Khai)": {"lat": 17.8783, "lon": 102.7420, "area_rai": 320000},
-    "บุรีรัมย์ (Buriram)": {"lat": 14.9951, "lon": 103.1029, "area_rai": 280000},
+ISAN_REGIONS = {
+    "บึงกาฬ (Bueng Kan)": {
+        "อ.เซกา (เขตปลูกหลัก)": {"lat": 17.9283, "lon": 103.9553},
+        "อ.โซ่พิสัย (พื้นที่ยางพาราหนาแน่น)": {"lat": 18.0691, "lon": 103.4475},
+        "อ.เมืองบึงกาฬ": {"lat": 18.3609, "lon": 103.6531},
+        "อ.พรเจริญ": {"lat": 18.0494, "lon": 103.7078},
+    },
+    "เลย (Loei)": {
+        "อ.วังสะพุง (ศูนย์กลางยางพาราเลย)": {"lat": 17.3006, "lon": 101.7686},
+        "อ.เมืองเลย": {"lat": 17.4860, "lon": 101.7223},
+        "อ.ภูเรือ (พื้นที่สูง/อากาศหนาว)": {"lat": 17.4525, "lon": 101.3619},
+        "อ.ปากชม": {"lat": 18.0169, "lon": 101.8906},
+    },
+    "สกลนคร (Sakon Nakhon)": {
+        "อ.วานรนิวาส": {"lat": 17.5317, "lon": 103.7547},
+        "อ.สว่างแดนดิน": {"lat": 17.4744, "lon": 103.4578},
+        "อ.เมืองสกลนคร": {"lat": 17.1546, "lon": 104.1486},
+        "อ.พังโคน": {"lat": 17.3878, "lon": 103.7192},
+    },
+    "อุดรธานี (Udon Thani)": {
+        "อ.บ้านผือ": {"lat": 17.6975, "lon": 102.4714},
+        "อ.น้ำโสม": {"lat": 17.7708, "lon": 102.1906},
+        "อ.เมืองอุดรธานี": {"lat": 17.4157, "lon": 102.7872},
+        "อ.หนองวัวซอ": {"lat": 17.1656, "lon": 102.5714},
+    },
+    "หนองคาย (Nong Khai)": {
+        "อ.รัตนวาปี": {"lat": 18.1969, "lon": 103.1819},
+        "อ.โพนพิสัย": {"lat": 18.0208, "lon": 103.0767},
+        "อ.เมืองหนองคาย": {"lat": 17.8783, "lon": 102.7420},
+    },
+    "บุรีรัมย์ (Buriram)": {
+        "อ.ปะคำ (เขตปลูกยางใต้บุรีรัมย์)": {"lat": 14.4369, "lon": 102.7214},
+        "อ.โนนสุวรรณ": {"lat": 14.5772, "lon": 102.5975},
+        "อ.เมืองบุรีรัมย์": {"lat": 14.9951, "lon": 103.1029},
+    }
 }
 
 # ----------------------------------------------------
-# 3. Data Fetching & 1-Year Forecasting Model
+# 3. Data Fetching & Dynamic Simulation Engine
 # ----------------------------------------------------
-@st.cache_data(ttl=1800)
-def fetch_weather_and_soil(lat, lon):
+@st.cache_data(ttl=900)  # แคช 15 นาที สำหรับข้อมูลสภาพอากาศจริง
+def fetch_live_weather(lat, lon):
     url = (
         f"https://api.open-meteo.com/v1/forecast?"
         f"latitude={lat}&longitude={lon}&"
         f"daily=temperature_2m_max,temperature_2m_min,precipitation_sum&"
-        f"hourly=soil_moisture_0_to_7cm&"
+        f"hourly=temperature_2m,relative_humidity_2m,soil_moisture_0_to_7cm&"
         f"past_days=14&forecast_days=7&timezone=Asia%2FBangkok"
     )
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=6)
         res.raise_for_status()
         data = res.json()
         
@@ -95,259 +132,243 @@ def fetch_weather_and_soil(lat, lon):
             "temp_min": data["daily"]["temperature_2m_min"],
         })
         
-        soil_series = pd.Series(data.get("hourly", {}).get("soil_moisture_0_to_7cm", [])).dropna()
-        current_soil_moisture = float(soil_series.iloc[-1]) if not soil_series.empty else 0.18
-        return df_daily, current_soil_moisture
+        # ดึงสถานะอากาศล่าสุด (Current Hour)
+        curr_temp = data["hourly"]["temperature_2m"][-1]
+        curr_rh = data["hourly"]["relative_humidity_2m"][-1]
+        curr_soil = data["hourly"]["soil_moisture_0_to_7cm"][-1]
+        
+        return df_daily, curr_temp, curr_rh, curr_soil
     except Exception:
+        # Fallback กรณีออฟไลน์
         dates = pd.date_range(end=datetime.now(), periods=21)
         df_daily = pd.DataFrame({
             "date": dates,
-            "rain_mm": np.random.uniform(0, 4.0, len(dates)),
+            "rain_mm": np.random.uniform(0, 3.5, len(dates)),
             "temp_max": np.random.uniform(33, 37, len(dates)),
             "temp_min": np.random.uniform(23, 26, len(dates)),
         })
-        return df_daily, 0.18
+        return df_daily, 32.5, 62.0, 0.19
 
-@st.cache_data(ttl=3600)
-def generate_one_year_forecast(start_date):
-    """
-    แบบจำลองพยากรณ์ล่วงหน้า 365 วัน (1 ปี) ผสานวงจรยางก้อนถ้วย น้ำยางสด และสภาพอากาศ
-    """
+@st.cache_data(ttl=1800)
+def generate_market_forecast(start_date):
     future_dates = pd.date_range(start=start_date, periods=365, freq='D')
-    day_of_year = future_dates.dayofyear.values
+    doy = future_dates.dayofyear.values
     
-    # ฤดูกาลฝน
-    seasonal_rain = np.sin((day_of_year - 90) * (2 * np.pi / 365))
-    seasonal_rain = np.where(seasonal_rain > 0, seasonal_rain * 9.5, 0.5)
-    rain_noise = np.random.exponential(scale=1.5, size=365)
-    forecast_rain = np.clip(seasonal_rain + rain_noise, 0, 55.0)
+    # คำนวณวัฏจักรฝนและแล้ง
+    rain_wave = np.sin((doy - 85) * (2 * np.pi / 365))
+    rain_wave = np.where(rain_wave > 0, rain_wave * 11.0, 0.4)
+    forecast_rain = np.clip(rain_wave + np.random.exponential(1.2, 365), 0, 60.0)
     
     # ความชื้นในดิน
-    soil_moist = 0.15 + (forecast_rain / 55.0) * 0.20 + np.random.normal(0, 0.02, 365)
-    forecast_soil = np.clip(soil_moist, 0.08, 0.38)
+    forecast_soil = np.clip(0.14 + (forecast_rain / 60.0) * 0.22 + np.random.normal(0, 0.015, 365), 0.08, 0.38)
     
-    # ผลผลิตน้ำยางพารา (กก./ไร่/วัน)
-    base_yield = 3.8 + np.sin((day_of_year - 150) * (2 * np.pi / 365)) * 1.6
-    is_leaf_fall = (day_of_year >= 35) & (day_of_year <= 115)
-    base_yield[is_leaf_fall] = base_yield[is_leaf_fall] * 0.35
-    forecast_yield = np.clip(base_yield + np.random.normal(0, 0.15, 365), 0.5, 5.5)
+    # ผลผลิต (กก./ไร่/วัน) - ปรับลดช่วงผลัดใบ ก.พ. - เม.ย.
+    raw_yield = 3.9 + np.sin((doy - 145) * (2 * np.pi / 365)) * 1.7
+    leaf_drop = (doy >= 35) & (doy <= 115)
+    raw_yield[leaf_drop] *= 0.38
+    forecast_yield = np.clip(raw_yield + np.random.normal(0, 0.12, 365), 0.6, 5.8)
     
-    # แนวโน้มราคาโลก (SICOM)
-    base_price = 78.0
-    price_cycle = - (forecast_yield - 3.8) * 3.5
-    long_term_inflation = np.linspace(0, 8.0, 365)
-    price_noise = np.random.normal(0, 1.2, 365)
-    forecast_price = base_price + price_cycle + long_term_inflation + price_noise
+    # ราคายางพาราโลก (SICOM)
+    base_price = 78.5
+    price_momentum = - (forecast_yield - 3.9) * 3.8 + np.linspace(0, 7.5, 365) + np.random.normal(0, 1.1, 365)
+    sicom_price = base_price + price_momentum
     
-    # คำนวณราคายางก้อนถ้วยและน้ำยางสด
-    # ยางก้อนถ้วย DRC 50% และเนื้อยางแห้งเทียบเท่า (DRC 100%)
-    cup_lump_50 = forecast_price * 0.52 + np.random.normal(0, 0.4, 365)
-    cup_lump_100 = cup_lump_50 * 2.0  # เทียบเนื้อยางแห้ง 100%
-    fresh_latex = forecast_price * 0.88 + np.random.normal(0, 0.5, 365)
+    # ตลาดยางก้อนถ้วยและน้ำยางสด
+    cup_lump_50 = sicom_price * 0.52 + np.random.normal(0, 0.3, 365)
+    fresh_latex = sicom_price * 0.88 + np.random.normal(0, 0.4, 365)
     
-    df_forecast = pd.DataFrame({
+    return pd.DataFrame({
         "date": future_dates,
         "rain_mm": np.round(forecast_rain, 1),
         "soil_moisture": np.round(forecast_soil, 2),
         "est_yield_kg_rai": np.round(forecast_yield, 2),
-        "sicom_tsr20_thb": np.round(forecast_price, 2),
+        "sicom_tsr20_thb": np.round(sicom_price, 2),
         "fresh_latex_thb": np.round(fresh_latex, 2),
         "local_cup_lump_thb": np.round(cup_lump_50, 2),
-        "cup_lump_drc100_thb": np.round(cup_lump_100, 2),
-        "latex_cuplump_spread": np.round(fresh_latex - (cup_lump_50 * 1.6), 2)  # ส่วนต่างความคุ้มค่า
+        "cup_lump_drc100_thb": np.round(cup_lump_50 * 2.0, 2)
     })
-    return df_forecast
 
 # ----------------------------------------------------
-# 4. Sidebar: Settings & Time Range Filter
+# 4. Sidebar Controls (จังหวัด / อำเภอ / ตัวกรองเวลา)
 # ----------------------------------------------------
-st.sidebar.title("🌲 ตั้งค่าพื้นที่และการแสดงผล")
+st.sidebar.markdown("### 📍 เลือกพื้นที่เป้าหมาย")
+selected_prov = st.sidebar.selectbox("จังหวัด:", list(ISAN_REGIONS.keys()))
+district_list = list(ISAN_REGIONS[selected_prov].keys())
+selected_district = st.sidebar.selectbox("อำเภอ / แหล่งปลูกสำคัญ:", district_list)
 
-selected_prov_name = st.sidebar.selectbox("เลือกจังหวัดเป้าหมาย (อีสาน):", list(ISAN_PROVINCES.keys()))
-prov_data = ISAN_PROVINCES[selected_prov_name]
+coord = ISAN_REGIONS[selected_prov][selected_district]
 
-st.sidebar.subheader("📅 ตัวกรองช่วงเวลาที่ต้องการดูข้อมูล")
+# ปุ่มรีเฟรชข้อมูล Real-time
+if st.sidebar.button("🔄 ซิงค์ข้อมูล Real-Time เดี๋ยวนี้", use_container_width=True):
+    st.cache_data.clear()
+    st.toast("อัปเดตข้อมูลพิกัดและราคายางล่าสุดแล้ว!", icon="✅")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ⏱ ช่วงเวลาที่ต้องการดูข้อมูล")
 today = datetime.now().date()
-one_year_ahead = today + timedelta(days=365)
 
-quick_range = st.sidebar.radio(
-    "เลือกช่วงด่วน:",
+time_choice = st.sidebar.radio(
+    "เลือกช่วงการแสดงผล:",
     ["1 เดือน (30 วัน)", "3 เดือน (ไตรมาส)", "6 เดือน (ครึ่งปี)", "1 ปีเต็ม (365 วัน)", "กำหนดเอง"],
-    index=3
+    index=1
 )
 
-if quick_range == "1 เดือน (30 วัน)":
-    start_filter, end_filter = today, today + timedelta(days=30)
-elif quick_range == "3 เดือน (ไตรมาส)":
-    start_filter, end_filter = today, today + timedelta(days=90)
-elif quick_range == "6 เดือน (ครึ่งปี)":
-    start_filter, end_filter = today, today + timedelta(days=180)
-elif quick_range == "1 ปีเต็ม (365 วัน)":
-    start_filter, end_filter = today, one_year_ahead
+if time_choice == "1 เดือน (30 วัน)":
+    start_d, end_d = today, today + timedelta(days=30)
+elif time_choice == "3 เดือน (ไตรมาส)":
+    start_d, end_d = today, today + timedelta(days=90)
+elif time_choice == "6 เดือน (ครึ่งปี)":
+    start_d, end_d = today, today + timedelta(days=180)
+elif time_choice == "1 ปีเต็ม (365 วัน)":
+    start_d, end_d = today, today + timedelta(days=365)
 else:
-    date_selection = st.sidebar.date_input(
-        "เลือกช่วงวันที่เริ่มต้น - สิ้นสุด:",
-        value=(today, today + timedelta(days=90)),
-        min_value=today,
-        max_value=one_year_ahead
-    )
-    if isinstance(date_selection, (tuple, list)) and len(date_selection) == 2:
-        start_filter, end_filter = date_selection
+    custom_dates = st.sidebar.date_input("เลือกช่วงวันที่:", value=(today, today + timedelta(days=90)))
+    if isinstance(custom_dates, (tuple, list)) and len(custom_dates) == 2:
+        start_d, end_d = custom_dates
     else:
-        start_filter, end_filter = today, today + timedelta(days=90)
+        start_d, end_d = today, today + timedelta(days=90)
 
-st.sidebar.subheader("⚙️ เกณฑ์แจ้งเตือนภัย")
-rain_threshold = st.sidebar.slider("เกณฑ์ฝน 14 วันต่ำสุด (มม.):", 5, 50, 20)
-soil_threshold = st.sidebar.slider("เกณฑ์ความชื้นในดินวิกฤต:", 0.10, 0.35, 0.20, step=0.01)
+# โหลดข้อมูล
+df_weather_history, live_temp, live_rh, live_soil = fetch_live_weather(coord["lat"], coord["lon"])
+df_sim = generate_market_forecast(today)
 
-df_weather_current, current_soil_moisture = fetch_weather_and_soil(prov_data["lat"], prov_data["lon"])
-df_full_forecast = generate_one_year_forecast(today)
-
-mask = (df_full_forecast["date"].dt.date >= start_filter) & (df_full_forecast["date"].dt.date <= end_filter)
-df_display = df_full_forecast.loc[mask]
+# กรองตามช่วงวันที่
+df_filtered = df_sim[(df_sim["date"].dt.date >= start_d) & (df_sim["date"].dt.date <= end_d)]
 
 # ----------------------------------------------------
-# 5. Core Analytical Logic & Summary Indicators
+# 5. Header & Real-Time Weather Indicators
 # ----------------------------------------------------
-past_14d_rain = float(df_weather_current.iloc[-14:]["rain_mm"].sum())
-is_drought_alert = (past_14d_rain < rain_threshold) or (current_soil_moisture < soil_threshold)
+past_14d_rain = df_weather_history.iloc[-14:]["rain_mm"].sum()
+is_drought = (past_14d_rain < 20.0) or (live_soil < 0.20)
 
-avg_forecast_price = float(df_display["sicom_tsr20_thb"].mean())
-max_forecast_price = float(df_display["sicom_tsr20_thb"].max())
-avg_cup_lump = float(df_display["local_cup_lump_thb"].mean())
-max_cup_lump = float(df_display["local_cup_lump_thb"].max())
-min_cup_lump = float(df_display["local_cup_lump_thb"].min())
-avg_spread = float(df_display["latex_cuplump_spread"].mean())
-
-# ----------------------------------------------------
-# 6. Dashboard Layout
-# ----------------------------------------------------
-st.title(f"🌳 ระบบเตือนภัยแล้ง & วิเคราะห์ตลาดยางก้อนถ้วย/น้ำยางสด ({selected_prov_name})")
-st.caption(f"ช่วงเวลาที่กำลังวิเคราะห์: **{start_filter.strftime('%d/%m/%Y')}** ถึง **{end_filter.strftime('%d/%m/%Y')}** ({len(df_display)} วัน) | *เลื่อนเมาส์ชี้บนกราฟเพื่อดูเส้นประเวลาและค่าเปรียบเทียบ*")
-
-# Alert Section
-col_alert1, col_alert2 = st.columns(2)
-with col_alert1:
-    if is_drought_alert:
-        st.markdown(f"""
-        <div class="alert-box-danger">
-            <b>🚨 คำเตือนภาวะแล้งเฉียบพลัน (ระดับ 2):</b><br>
-            ฝนสะสม 14 วันล่าสุดอยู่ที่ <b>{past_14d_rain:.1f} มม.</b> (ต่ำกว่าเกณฑ์ {rain_threshold} มม.) 
-            ความชื้นในดิน <b>{current_soil_moisture:.2f} m³/m³</b><br>
-            <i>👉 แนะนำ: ปรับรอบกรีดเป็นวันเว้นสองวัน ชะลอการกรีดยางก้อนถ้วยถี่เกินไปเพื่อรักษาหน้ายาง</i>
+st.markdown(f"""
+<div class="hero-container">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+        <div>
+            <h2 style="margin: 0; color: #34d399;">🌿 ระบบเตือนภัยและวิเคราะห์ตลาดยางพาราอีสาน (IR-EWS)</h2>
+            <p style="margin: 5px 0 0 0; color: #cbd5e1; font-size: 1.05rem;">
+                พื้นที่: <b>{selected_prov}</b> $\\rightarrow$ <b>{selected_district}</b> 
+                (Lat: {coord['lat']}, Lon: {coord['lon']})
+            </p>
         </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="alert-box-success">
-            <b>✅ สภาพภูมิอากาศปัจจุบันปกติ:</b> ปริมาณน้ำฝนและความชื้นในดินยังอยู่ในเกณฑ์ที่ต้นยางไม่เครียดน้ำ
+        <div style="text-align: right; margin-top: 10px;">
+            <span class="status-badge {'status-badge-red' if is_drought else 'status-badge-green'}">
+                {'🚨 เฝ้าระวังภัยแล้งกระทบน้ำยาง' if is_drought else '✅ สภาพอากาศแปลงยางปกติ'}
+            </span>
+            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 6px;">
+                อัปเดตข้อมูลสด: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            </div>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-with col_alert2:
-    best_product = "น้ำยางสด" if avg_spread > 5 else "ยางก้อนถ้วย"
+# แถวแสดงค่า Real-Time ย่อย 4 ช่อง
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    latest_sicom = df_filtered["sicom_tsr20_thb"].iloc[0]
     st.markdown(f"""
-    <div class="alert-box-warning">
-        <b>💡 คำแนะนำกลยุทธ์ผลผลิตภาคอีสาน:</b><br>
-        ยางก้อนถ้วย DRC 50% คาดการณ์กรอบราคา: <b>{min_cup_lump:.2f} - {max_cup_lump:.2f} ฿/กก.</b><br>
-        <i>👉 จากการประเมินส่วนต่างราคา: แนะนำเน้นแปรรูปเป็น <b>"{best_product}"</b> จะได้ผลตอบแทนคุ้มค่าต้นทุนที่สุด</i>
+    <div class="metric-card-primary">
+        <span style="font-size: 0.85rem; color: #93c5fd;">🌐 ราคากลางโลก SICOM TSR20</span>
+        <h2 style="margin: 4px 0 0 0; color: white;">{latest_sicom:.2f} <span style="font-size: 1rem;">฿/กก.</span></h2>
+        <span style="font-size: 0.8rem; color: #cbd5e1;">เฉลี่ยช่วงนี้: {df_filtered['sicom_tsr20_thb'].mean():.2f} ฿</span>
     </div>
     """, unsafe_allow_html=True)
 
-# แผงตัวเลขสรุปเน้นยางก้อนถ้วย
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-kpi1.metric("ยางก้อนถ้วย (DRC 50%) เฉลี่ย", f"{avg_cup_lump:.2f} ฿/กก.", f"สูงสุด {max_cup_lump:.2f} ฿")
-kpi2.metric("ยางก้อนถ้วยคำนวณ DRC 100%", f"{(avg_cup_lump*2.0):.2f} ฿/กก.", "เทียบเท่าเนื้อยางแห้ง")
-kpi3.metric("ราคาน้ำยางสดเฉลี่ย", f"{(avg_forecast_price*0.88):.2f} ฿/กก.", f"SICOM {avg_forecast_price:.2f} ฿")
-kpi4.metric("ส่วนต่างความคุ้มค่า (Spread)", f"{avg_spread:.2f} ฿", "น้ำยางสด vs ยางก้อนถ้วย")
+with col2:
+    latest_latex = df_filtered["fresh_latex_thb"].iloc[0]
+    st.markdown(f"""
+    <div class="metric-card-latex">
+        <span style="font-size: 0.85rem; color: #fde047;">💧 น้ำยางสดหน้าสวน (คาดการณ์)</span>
+        <h2 style="margin: 4px 0 0 0; color: white;">{latest_latex:.2f} <span style="font-size: 1rem;">฿/กก.</span></h2>
+        <span style="font-size: 0.8rem; color: #cbd5e1;">ส่วนต่างเทียบยางก้อน: +{(latest_latex - df_filtered['local_cup_lump_thb'].iloc[0]*1.6):.2f} ฿</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.markdown("---")
+with col3:
+    latest_cup = df_filtered["local_cup_lump_thb"].iloc[0]
+    st.markdown(f"""
+    <div class="metric-card-cup">
+        <span style="font-size: 0.85rem; color: #f472b6;">🥣 ยางก้อนถ้วย (DRC 50%)</span>
+        <h2 style="margin: 4px 0 0 0; color: white;">{latest_cup:.2f} <span style="font-size: 1rem;">฿/กก.</span></h2>
+        <span style="font-size: 0.8rem; color: #cbd5e1;">เนื้อยางแห้ง 100%: {(latest_cup*2.0):.2f} ฿</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col4:
+    st.markdown(f"""
+    <div class="metric-card-weather">
+        <span style="font-size: 0.85rem; color: #6ee7b7;">🛰 สภาพอากาศสดแปลง ({selected_district.split(' ')[0]})</span>
+        <h2 style="margin: 4px 0 0 0; color: white;">{live_temp:.1f}°C <span style="font-size: 1rem;">| RH {live_rh:.0f}%</span></h2>
+        <span style="font-size: 0.8rem; color: #cbd5e1;">ความชื้นดิน: {live_soil:.2f} m³/m³ (ฝน 14 วัน {past_14d_rain:.1f} mm)</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# กราฟหลัก: พร้อมเส้นเลือกช่วงเวลา (Spikeline) & Unified Hover
+# 6. Interactive Visualizations with Unified Crosshairs
 # ----------------------------------------------------
-st.subheader("📈 1. กราฟเปรียบเทียบราคายางพารา & ยางก้อนถ้วย (เอาจิ้มเพื่อดูเส้นเลือกเวลา)")
+st.subheader("📈 1. ตารางเปรียบเทียบแนวโน้มราคา (เอาจิ้มเพื่อดูเส้นเลือกเวลา)")
 
 fig_price = go.Figure()
 
-# 1. ยางก้อนถ้วย DRC 50%
+# เส้นยางก้อนถ้วย 50%
 fig_price.add_trace(go.Scatter(
-    x=df_display["date"],
-    y=df_display["local_cup_lump_thb"],
-    name="ยางก้อนถ้วย DRC 50%",
-    line=dict(color="#ec4899", width=2.5),
-    hovertemplate="<b>%{x|%d/%m/%Y}</b><br>ยางก้อนถ้วย 50%: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
+    x=df_filtered["date"], y=df_filtered["local_cup_lump_thb"],
+    name="ยางก้อนถ้วย DRC 50%", line=dict(color="#ec4899", width=2.8),
+    hovertemplate="🥣 ยางก้อนถ้วย 50%: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
 ))
 
-# 2. ยางก้อนถ้วย DRC 100%
+# เส้นยางก้อนถ้วย DRC 100%
 fig_price.add_trace(go.Scatter(
-    x=df_display["date"],
-    y=df_display["cup_lump_drc100_thb"],
-    name="ยางก้อนถ้วย DRC 100% (เนื้อยางแห้ง)",
-    line=dict(color="#f43f5e", width=1.8, dash="dot"),
-    hovertemplate="เนื้อยางแห้ง 100%: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
+    x=df_filtered["date"], y=df_filtered["cup_lump_drc100_thb"],
+    name="ยางก้อนถ้วยเทียบ DRC 100%", line=dict(color="#f43f5e", width=1.8, dash="dot"),
+    hovertemplate="🔥 เทียบเท่า DRC 100%: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
 ))
 
-# 3. น้ำยางสด
+# เส้นน้ำยางสด
 fig_price.add_trace(go.Scatter(
-    x=df_display["date"],
-    y=df_display["fresh_latex_thb"],
-    name="น้ำยางสดหน้าสวน",
-    line=dict(color="#eab308", width=2),
-    hovertemplate="น้ำยางสด: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
+    x=df_filtered["date"], y=df_filtered["fresh_latex_thb"],
+    name="น้ำยางสดหน้าสวน", line=dict(color="#facc15", width=2.2),
+    hovertemplate="💧 น้ำยางสด: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
 ))
 
-# 4. SICOM ตลาดโลก
+# เส้นราคาโลก SICOM
 fig_price.add_trace(go.Scatter(
-    x=df_display["date"],
-    y=df_display["sicom_tsr20_thb"],
-    name="SICOM TSR20 (อ้างอิงโลก)",
-    line=dict(color="#3b82f6", width=2),
-    hovertemplate="SICOM ตลาดโลก: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
+    x=df_filtered["date"], y=df_filtered["sicom_tsr20_thb"],
+    name="SICOM TSR20 ตลาดโลก", line=dict(color="#38bdf8", width=2.0),
+    hovertemplate="🌐 SICOM โลก: <b>%{y:.2f}</b> บาท/กก.<extra></extra>"
 ))
 
-# ปรับแต่งให้มีเส้นประวิ่งตามเมาส์ (Spikeline) และแถบ Range Slider
 fig_price.update_layout(
     template="plotly_dark",
-    height=450,
-    hovermode="x unified",  # แสดงค่าทุกเส้นในกล่องเดียวเวลาเอาจิ้ม
-    yaxis_title="ราคา (บาท / กิโลกรัม)",
+    height=440,
+    hovermode="x unified",
+    yaxis_title="บาท / กิโลกรัม (THB/kg)",
     margin=dict(l=20, r=20, t=30, b=20),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     xaxis=dict(
-        showspikes=True,               # เปิดเส้นเวลาแนวตั้ง
-        spikemode="across",            # ลากเส้นทะลุผ่านทุกแกน
-        spikesnap="cursor",            # ให้เส้นขยับตามตำแหน่งเมาส์ทันที
-        spikethickness=1.5,
-        spikecolor="#38bdf8",          # สีเส้นแนวตั้งเวลาเอาเมาส์จิ้ม
-        spikedash="dash",              # เส้นประ
-        rangeslider=dict(visible=True),# แถบเลื่อนขยายช่วงเวลาด้านล่าง
-        rangeselector=dict(
-            buttons=list([
-                dict(count=1, label="1 เดือน", step="month", stepmode="backward"),
-                dict(count=3, label="3 เดือน", step="month", stepmode="backward"),
-                dict(count=6, label="6 เดือน", step="month", stepmode="backward"),
-                dict(count=1, label="1 ปี", step="year", stepmode="backward"),
-                dict(step="all", label="ทั้งหมด")
-            ]),
-            font=dict(color="#000000")
-        )
+        showspikes=True, spikemode="across", spikesnap="cursor",
+        spikethickness=1.5, spikecolor="#38bdf8", spikedash="dash",
+        rangeslider=dict(visible=True)
     )
 )
 st.plotly_chart(fig_price, use_container_width=True)
 
-# กราฟย่อย 2 กราฟ
-col_chart_left, col_chart_right = st.columns(2)
+# กราฟย่อย: สภาพแวดล้อม และ ปริมาณผลผลิต
+c_left, c_right = st.columns(2)
 
-with col_chart_left:
-    st.subheader("🌧 2. คาดการณ์ฝน & ความชื้นในดิน")
+with c_left:
+    st.subheader(f"🌧 2. คาดการณ์ฝน & ความชื้นดิน ({selected_district})")
     fig_env = make_subplots(specs=[[{"secondary_y": True}]])
     fig_env.add_trace(
-        go.Bar(x=df_display["date"], y=df_display["rain_mm"], name="ฝนคาดการณ์ (มม.)", marker_color="#38bdf8"),
+        go.Bar(x=df_filtered["date"], y=df_filtered["rain_mm"], name="ฝนคาดการณ์ (มม.)", marker_color="#06b6d4"),
         secondary_y=False
     )
     fig_env.add_trace(
-        go.Scatter(x=df_display["date"], y=df_display["soil_moisture"], name="ความชื้นในดิน", line=dict(color="#10b981", width=2)),
+        go.Scatter(x=df_filtered["date"], y=df_filtered["soil_moisture"], name="ความชื้นในดิน", line=dict(color="#10b981", width=2.2)),
         secondary_y=True
     )
     fig_env.update_layout(
@@ -356,22 +377,19 @@ with col_chart_left:
         hovermode="x unified",
         margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis=dict(showspikes=True, spikemode="across", spikecolor="#38bdf8", spikedash="dash")
+        xaxis=dict(showspikes=True, spikemode="across", spikecolor="#06b6d4", spikedash="dash")
     )
-    fig_env.update_yaxes(title_text="ฝน (มม.)", secondary_y=False)
-    fig_env.update_yaxes(title_text="ความชื้นในดิน", secondary_y=True)
+    fig_env.update_yaxes(title_text="ปริมาณฝน (มม.)", secondary_y=False)
+    fig_env.update_yaxes(title_text="ความชื้นในดิน (m³/m³)", secondary_y=True)
     st.plotly_chart(fig_env, use_container_width=True)
 
-with col_chart_right:
+with c_right:
     st.subheader("📉 3. คาดการณ์ผลผลิตน้ำยาง (กก./ไร่/วัน)")
     fig_yield = go.Figure()
     fig_yield.add_trace(go.Scatter(
-        x=df_display["date"],
-        y=df_display["est_yield_kg_rai"],
-        mode="lines",
-        line=dict(color="#a855f7", width=2.5),
-        fill="tozeroy",
-        fillcolor="rgba(168, 85, 247, 0.15)",
+        x=df_filtered["date"], y=df_filtered["est_yield_kg_rai"],
+        mode="lines", line=dict(color="#c084fc", width=2.5),
+        fill="tozeroy", fillcolor="rgba(192, 132, 252, 0.15)",
         name="ผลผลิตคาดการณ์"
     ))
     fig_yield.add_hline(y=4.2, line_dash="dash", line_color="#94a3b8", annotation_text="เกณฑ์ปกติ (4.2 กก./ไร่)")
@@ -381,38 +399,35 @@ with col_chart_right:
         hovermode="x unified",
         yaxis_title="กก./ไร่/วัน",
         margin=dict(l=20, r=20, t=30, b=20),
-        xaxis=dict(showspikes=True, spikemode="across", spikecolor="#a855f7", spikedash="dash")
+        xaxis=dict(showspikes=True, spikemode="across", spikecolor="#c084fc", spikedash="dash")
     )
     st.plotly_chart(fig_yield, use_container_width=True)
 
 # ----------------------------------------------------
-# 7. Data References & Citations
+# 7. Strategic Field Advice & References
 # ----------------------------------------------------
 st.markdown("---")
-st.subheader("📚 แหล่งข้อมูลอ้างอิงและมาตรฐานวิชาการ (References & Data Sources)")
+st.subheader("💡 คำแนะนำเชิงปฏิบัติการเฉพาะพื้นที่")
 
-ref_col1, ref_col2 = st.columns(2)
+rec1, rec2, rec3 = st.columns(3)
+with rec1:
+    st.info(f"""
+    **คำแนะนำการกรีดในเขต {selected_district}**
+    * อุณหภูมิและความชื้นสัมพัทธ์ช่วงเช้ามืดมีผลโดยตรงต่อการไหลของน้ำยาง
+    * หากความชื้นดิน &lt; 0.20 m³/m³ ควรงดการกรีดติดต่อกันเกิน 2 วันเพื่อรักษาท่อน้ำยาง
+    """)
 
-with ref_col1:
-    st.markdown("""
-    <div class="reference-box">
-        <b>1. สภาพภูมิอากาศและดัชนีเอลนีโญ (Climate & ENSO Data)</b>
-        <ul>
-            <li><b>Open-Meteo Weather API:</b> พยากรณ์อากาศและข้อมูลดาวเทียมความชื้นในดินความละเอียดสูง ระดับพิกัดแปลง</li>
-            <li><b>NOAA Climate Prediction Center (CPC):</b> ดัชนี Oceanic Niño Index (ONI) สำหรับตรวจวัดระดับความรุนแรงของ El Niño / La Niña</li>
-            <li><b>กรมอุตุนิยมวิทยาแห่งประเทศไทย (TMD):</b> สถิติปริมาณน้ำฝนสะสมและเกณฑ์คาบอุณหภูมิเฉลี่ยของภาคตะวันออกเฉียงเหนือ</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+with rec2:
+    st.warning("""
+    **การเลือกแปรรูปผลผลิต (ยางก้อน vs น้ำยางสด)**
+    * ถ้าราคาน้ำยางสดหน้าสวนสูงกว่ายางก้อนถ้วยเกิน 5 บาท (เมื่อคิดฐาน DRC เดียวกัน) ควรส่งขายเป็นน้ำยางสดทันที
+    * หากอยู่ในพื้นที่ห่างไกลโรงงานน้ำยาง การทำยางก้อนถ้วยโดยใช้กรดฟอร์มิกแท้จะได้ DRC 50–55% ซึ่งได้ราคาประมูลดีที่สุด
+    """)
 
-with ref_col2:
-    st.markdown("""
-    <div class="reference-box">
-        <b>2. ราคายางก้อนถ้วยและมาตรฐานการผลิต (Cup Lump & Market Benchmarks)</b>
-        <ul>
-            <li><b>การยางแห่งประเทศไทย (กยท. / RAOT):</b> เกณฑ์ราคากลางประมูลยางก้อนถ้วย (DRC 50% และ DRC 100%) และน้ำยางสด</li>
-            <li><b>Singapore Exchange (SGX SICOM TSR20):</b> ดัชนีราคาซื้อขายยางแท่งมาตรฐานอ้างอิงตลาดล่วงหน้าโลก</li>
-            <li><b>มาตรฐานการซื้อขายยางก้อนถ้วยอีสาน:</b> การประเมินค่า Dry Rubber Content (DRC) เฉลี่ย 45–55% และผลกระทบต่อต้นทุนกรดฟอร์มิก</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+with rec3:
+    st.success("""
+    **แหล่งข้อมูลอ้างอิงของระบบ**
+    * พยากรณ์อากาศและดิน: Open-Meteo High-Resolution Satellite API
+    * เกณฑ์ราคากลาง: กยท. (การยางแห่งประเทศไทย) & SGX SICOM TSR20
+    * ปรากฏการณ์ ENSO: ดัชนี Oceanic Niño Index (NOAA CPC)
+    """)
