@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 # 1. Page Configuration & Custom UI Styling
 # ----------------------------------------------------
 st.set_page_config(
-    page_title="IR-EWS | ระบบวิเคราะห์ราคายางก้อนถ้วย DRC 100% & ปัจจัยตลาดโลก",
+    page_title="IR-EWS | ระบบวิเคราะห์ราคายางก้อนถ้วย DRC 100% & จัดการสิทธิ์",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -65,71 +65,16 @@ st.markdown("""
     .status-badge-red { background-color: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
     .admin-panel {
         background-color: #1e293b;
-        padding: 20px;
+        padding: 22px;
         border-radius: 12px;
-        border: 1px solid #475569;
+        border: 1px solid #3b82f6;
         margin-bottom: 25px;
-    }
-    /* ปรับแต่งปุ่มอัปเดตขนาดใหญ่พิเศษ */
-    div.stButton > button:first-child {
-        font-weight: bold;
-        border-radius: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# 2. ระบบจัดการผู้ใช้และสิทธิ์การเข้าใช้งาน (Auth System)
-# ----------------------------------------------------
-if "users_db" not in st.session_state:
-    st.session_state.users_db = {
-        "admin": {"password": "admin1234", "name": "ผู้ดูแลระบบหลัก", "role": "admin", "active": True},
-        "farmer01": {"password": "pass1234", "name": "สมาชิกสหกรณ์ 01", "role": "user", "active": True}
-    }
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
-
-def login():
-    st.markdown("## 🔐 เข้าสู่ระบบวิเคราะห์ตลาดยางก้อนถ้วย (IR-EWS)")
-    st.info("กรุณากรอกชื่อผู้ใช้และรหัสผ่านเพื่อเข้าใช้งานระบบ")
-    col1, col2, _ = st.columns([1.5, 1.5, 2])
-    with col1:
-        username = st.text_input("ชื่อผู้ใช้ (Username)")
-    with col2:
-        password = st.text_input("รหัสผ่าน (Password)", type="password")
-    
-    if st.button("เข้าสู่ระบบ"):
-        user = st.session_state.users_db.get(username)
-        if user and user["password"] == password:
-            if not user.get("active", True):
-                st.error("⚠️ บัญชีนี้ถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ (Admin)")
-            else:
-                st.session_state.logged_in = True
-                st.session_state.current_user = username
-                st.success(f"ยินดีต้อนรับ {user['name']} เข้าสู่ระบบ")
-                st.rerun()
-        else:
-            st.error("❌ ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
-
-def logout():
-    st.session_state.logged_in = False
-    st.session_state.current_user = None
-    st.rerun()
-
-if not st.session_state.logged_in or not st.session_state.current_user:
-    login()
-    st.stop()
-
-curr_user_info = st.session_state.users_db.get(
-    st.session_state.current_user,
-    {"name": "ผู้ใช้งาน", "role": "user", "active": True}
-)
-
-# ----------------------------------------------------
-# 3. ข้อมูลพิกัดและ DRC เฉลี่ยรายภาคของประเทศไทย
+# 2. ข้อมูลพิกัดและ DRC เฉลี่ยรายภาค
 # ----------------------------------------------------
 ISAN_REGIONS = {
     "บึงกาฬ (Bueng Kan)": {
@@ -174,6 +119,68 @@ REGIONAL_DRC_DATA = {
     "ภาคตะวันออก": {"avg_drc": 50.8, "price_drc100": 80.80, "note": "ใกล้โรงงานแปรรูป ต้นทุนขนส่งต่ำ"},
     "ภาคเหนือ": {"avg_drc": 49.2, "price_drc100": 78.40, "note": "สภาพอากาศหนาวเย็นในฤดูผลัดใบ"}
 }
+
+# ----------------------------------------------------
+# 3. ระบบจัดการผู้ใช้และสิทธิ์การเข้าใช้งาน (User Access Control)
+# ----------------------------------------------------
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {
+        "admin": {
+            "password": "admin1234",
+            "name": "ผู้ดูแลระบบหลัก (Admin)",
+            "role": "admin",
+            "allowed_prov": "ทั้งหมด",
+            "active": True
+        },
+        "farmer01": {
+            "password": "pass1234",
+            "name": "สหกรณ์บึงกาฬ",
+            "role": "analyst",
+            "allowed_prov": "บึงกาฬ (Bueng Kan)",
+            "active": True
+        }
+    }
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+
+def login():
+    st.markdown("## 🔐 เข้าสู่ระบบวิเคราะห์ตลาดยางก้อนถ้วย (IR-EWS)")
+    st.info("กรุณากรอกชื่อผู้ใช้และรหัสผ่านที่ได้รับจากผู้ดูแลระบบ (Admin)")
+    col1, col2, _ = st.columns([1.5, 1.5, 2])
+    with col1:
+        username = st.text_input("ชื่อผู้ใช้ (Username):")
+    with col2:
+        password = st.text_input("รหัสผ่าน (Password):", type="password")
+    
+    if st.button("เข้าสู่ระบบ", width="stretch"):
+        user = st.session_state.users_db.get(username)
+        if user and user["password"] == password:
+            if not user.get("active", True):
+                st.error("⚠️ บัญชีนี้ถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ (Admin)")
+            else:
+                st.session_state.logged_in = True
+                st.session_state.current_user = username
+                st.success(f"ยินดีต้อนรับ {user['name']} เข้าสู่ระบบ")
+                st.rerun()
+        else:
+            st.error("❌ ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
+    st.rerun()
+
+if not st.session_state.logged_in or not st.session_state.current_user:
+    login()
+    st.stop()
+
+curr_user_info = st.session_state.users_db.get(
+    st.session_state.current_user,
+    {"name": "ผู้ใช้งาน", "role": "viewer", "allowed_prov": "ทั้งหมด", "active": True}
+)
 
 # ----------------------------------------------------
 # 4. Data Engine (Real-Time Weather, FX & Forecast)
@@ -258,34 +265,47 @@ def generate_drc100_forecast(start_date, oil_bias, usd_thb_bias, jpy_thb_bias):
     })
 
 # ----------------------------------------------------
-# 5. Sidebar Controls & Market Assumptions
+# 5. Sidebar Controls & Role Info
 # ----------------------------------------------------
 st.sidebar.markdown(f"👤 ผู้ใช้งาน: **{curr_user_info['name']}**")
-st.sidebar.markdown(f"🛡️ ระดับสิทธิ์: **`{curr_user_info['role'].upper()}`**")
+st.sidebar.markdown(f"🛡️ สิทธิ์การใช้งาน: **`{curr_user_info['role'].upper()}`**")
+if curr_user_info.get("allowed_prov") != "ทั้งหมด":
+    st.sidebar.info(f"📌 จำกัดพื้นที่: {curr_user_info['allowed_prov']}")
 
-if st.sidebar.button("🚪 ออกจากระบบ"):
+if st.sidebar.button("🚪 ออกจากระบบ", width="stretch"):
     logout()
 
-# ปุ่มอัปเดตแบบเด่นใน Sidebar
 st.sidebar.markdown("---")
-if st.sidebar.button("⚡ บังคับดึงข้อมูล REAL-TIME เดี๋ยวนี้", type="primary", use_container_width=True):
+if st.sidebar.button("⚡ บังคับดึงข้อมูล REAL-TIME เดี๋ยวนี้", type="primary", width="stretch"):
     st.cache_data.clear()
     st.toast("ดึงข้อมูลสภาพอากาศดาวเทียมและราคาเรียลไทม์ใหม่เรียบร้อย!", icon="🚀")
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📍 เลือกพื้นที่แปลงยาง (ภาคอีสาน)")
-selected_prov = st.sidebar.selectbox("จังหวัด:", list(ISAN_REGIONS.keys()))
+
+# กรองจังหวัดตามสิทธิ์ที่ Admin กำหนดให้ User คนนั้น
+available_provs = list(ISAN_REGIONS.keys())
+if curr_user_info.get("allowed_prov") in available_provs:
+    selected_prov = curr_user_info["allowed_prov"]
+    st.sidebar.selectbox("จังหวัด (ตามสิทธิ์ที่คุณได้รับ):", [selected_prov], disabled=True)
+else:
+    selected_prov = st.sidebar.selectbox("จังหวัด:", available_provs)
+
 district_list = list(ISAN_REGIONS[selected_prov].keys())
 selected_district = st.sidebar.selectbox("อำเภอ / แหล่งปลูกสำคัญ:", district_list)
-
 coord = ISAN_REGIONS[selected_prov][selected_district]
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🛢️ ตัวแปรตลาดโลก & ค่าเงิน")
-oil_input = st.sidebar.slider("ราคาน้ำมันดิบ Brent ($/บาร์เรล):", 65.0, 110.0, 78.5, step=0.5)
-usd_thb = st.sidebar.slider("อัตราแลกเปลี่ยน USD/THB:", 33.0, 39.0, 36.2, step=0.1)
-jpy_thb = st.sidebar.slider("อัตราแลกเปลี่ยน JPY/THB (ต่อ 100 เยน):", 21.0, 28.0, 23.8, step=0.1)
+
+# เฉพาะ admin และ analyst ที่ปรับแต่งตัวแปรได้ ถ้าเป็น viewer จะล็อกค่าไว้
+can_adjust_macro = curr_user_info.get("role") in ["admin", "analyst"]
+oil_input = st.sidebar.slider("ราคาน้ำมันดิบ Brent ($/บาร์เรล):", 65.0, 110.0, 78.5, step=0.5, disabled=not can_adjust_macro)
+usd_thb = st.sidebar.slider("อัตราแลกเปลี่ยน USD/THB:", 33.0, 39.0, 36.2, step=0.1, disabled=not can_adjust_macro)
+jpy_thb = st.sidebar.slider("อัตราแลกเปลี่ยน JPY/THB (ต่อ 100 เยน):", 21.0, 28.0, 23.8, step=0.1, disabled=not can_adjust_macro)
+if not can_adjust_macro:
+    st.sidebar.caption("🔒 สิทธิ์ระดับ Viewer ใช้ค่ามาตรฐานตลาด (ไม่สามารถปรับสไลเดอร์ได้)")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⏱ ช่วงเวลาพยากรณ์ล่วงหน้า")
@@ -311,53 +331,97 @@ else:
         start_d, end_d = today, today + timedelta(days=90)
 
 # ----------------------------------------------------
-# 6. Admin Panel (แผงจัดการสิทธิ์สำหรับ Admin)
+# 6. Admin Panel: แผงที่ Admin กำหนด Username / Password / สิทธิ์ ให้ User
 # ----------------------------------------------------
 if curr_user_info.get("role") == "admin":
-    with st.expander("⚙️ แผงควบคุมระบบของผู้ดูแล (Admin Management Console)", expanded=False):
+    with st.expander("👑 แผงควบคุม Admin: สร้างและกำหนดสิทธิ์ให้ User โดยตรง", expanded=False):
         st.markdown('<div class="admin-panel">', unsafe_allow_html=True)
-        st.subheader("👥 จัดการสิทธิ์การเข้าใช้งานของผู้ใช้ (User Access Control)")
+        st.subheader("📋 รายชื่อผู้ใช้และสิทธิ์การใช้งานทั้งหมดในระบบ")
         
+        # ตารางแสดงข้อมูล User
         user_rows = []
         for uname, udata in st.session_state.users_db.items():
             user_rows.append({
                 "Username": uname,
+                "รหัสผ่าน": udata["password"],
                 "ชื่อ-สกุล": udata["name"],
-                "สิทธิ์": udata["role"],
-                "สถานะ": "✅ อนุญาต (Active)" if udata.get("active", True) else "❌ ระงับสิทธิ์ (Inactive)"
+                "ระดับสิทธิ์ (Role)": udata["role"],
+                "พื้นที่ที่อนุญาต": udata.get("allowed_prov", "ทั้งหมด"),
+                "สถานะ": "✅ เปิดใช้งาน" if udata.get("active", True) else "❌ ปิดระงับสิทธิ์"
             })
         st.dataframe(pd.DataFrame(user_rows), width="stretch")
         
-        adm_col1, adm_col2 = st.columns(2)
-        with adm_col1:
-            st.markdown("**➕ เพิ่มผู้ใช้ใหม่เข้าสู่ระบบ:**")
-            new_u = st.text_input("Username ใหม่:")
-            new_p = st.text_input("Password ใหม่:", type="password")
-            new_n = st.text_input("ชื่อ-นามสกุล:")
-            new_r = st.selectbox("กำหนดระดับสิทธิ์:", ["user", "admin"])
-            if st.button("บันทึกผู้ใช้ใหม่"):
+        st.markdown("---")
+        adm_c1, adm_c2 = st.columns(2)
+        
+        # ฟอร์มสร้าง User ใหม่
+        with adm_c1:
+            st.markdown("#### ➕ สร้าง Username & Password ให้ User ใหม่")
+            new_u = st.text_input("กำหนด Username:")
+            new_p = st.text_input("กำหนด Password:")
+            new_n = st.text_input("ชื่อ-นามสกุล หรือ หน่วยงาน:")
+            new_r = st.selectbox("กำหนดระดับสิทธิ์:", ["viewer (ดูอย่างเดียว)", "analyst (ดู + ปรับตัวแปร)", "admin (ผู้ดูแลระบบ)"])
+            role_code = new_r.split(" ")[0]
+            
+            new_prov = st.selectbox("จำกัดการเข้าถึงพื้นที่:", ["ทั้งหมด"] + list(ISAN_REGIONS.keys()))
+            
+            if st.button("บันทึกและสร้างบัญชี User", type="primary"):
                 if new_u and new_p and new_n:
                     if new_u in st.session_state.users_db:
-                        st.warning("Username นี้มีอยู่ในระบบแล้ว")
+                        st.warning(f"Username '{new_u}' มีอยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น")
                     else:
                         st.session_state.users_db[new_u] = {
-                            "password": new_p, "name": new_n, "role": new_r, "active": True
+                            "password": new_p,
+                            "name": new_n,
+                            "role": role_code,
+                            "allowed_prov": new_prov,
+                            "active": True
                         }
-                        st.success(f"เพิ่มผู้ใช้ {new_u} เรียบร้อยแล้ว")
+                        st.success(f"สร้างบัญชีให้ '{new_u}' เรียบร้อยแล้ว! User สามารถล็อกอินด้วยรหัสนี้ได้ทันที")
                         st.rerun()
                 else:
-                    st.error("กรุณากรอกข้อมูลให้ครบถ้วน")
-                    
-        with adm_col2:
-            st.markdown("**🔄 ปรับสถานะ / ระงับสิทธิ์การใช้งาน:**")
-            target_user = st.selectbox("เลือกบัญชีที่ต้องการปรับสิทธิ์:", [u for u in st.session_state.users_db.keys() if u != "admin"])
-            if target_user:
-                current_status = st.session_state.users_db[target_user].get("active", True)
-                action_label = "ระงับสิทธิ์ (Block)" if current_status else "เปิดใช้งานสิทธิ์ (Activate)"
-                if st.button(action_label):
-                    st.session_state.users_db[target_user]["active"] = not current_status
-                    st.success(f"ปรับสถานะผู้ใช้ {target_user} เรียบร้อยแล้ว")
-                    st.rerun()
+                    st.error("กรุณากรอก Username, Password และชื่อ ให้ครบถ้วน")
+        
+        # ฟอร์มแก้ไข / ระงับสิทธิ์ / รีเซ็ตรหัสผ่าน
+        with adm_c2:
+            st.markdown("#### ⚙️ แก้ไขสิทธิ์ / รีเซ็ตรหัสผ่าน / ระงับสิทธิ์ User")
+            editable_users = [u for u in st.session_state.users_db.keys() if u != "admin"]
+            
+            if editable_users:
+                target_user = st.selectbox("เลือก User ที่ต้องการจัดการ:", editable_users)
+                u_target = st.session_state.users_db[target_user]
+                
+                reset_p = st.text_input(f"เปลี่ยนรหัสผ่านใหม่ของ {target_user}:", value=u_target["password"])
+                change_r = st.selectbox(
+                    f"เปลี่ยนระดับสิทธิ์ของ {target_user}:", 
+                    ["viewer", "analyst", "admin"],
+                    index=["viewer", "analyst", "admin"].index(u_target.get("role", "viewer"))
+                )
+                
+                col_btn1, col_btn2, col_btn3 = st.columns(3)
+                
+                with col_btn1:
+                    if st.button("บันทึกการแก้ไข"):
+                        st.session_state.users_db[target_user]["password"] = reset_p
+                        st.session_state.users_db[target_user]["role"] = change_r
+                        st.success(f"อัปเดตข้อมูลของ {target_user} สำเร็จ")
+                        st.rerun()
+                        
+                with col_btn2:
+                    current_status = u_target.get("active", True)
+                    btn_status_label = "ระงับสิทธิ์ ❌" if current_status else "เปิดใช้งาน ✅"
+                    if st.button(btn_status_label):
+                        st.session_state.users_db[target_user]["active"] = not current_status
+                        st.rerun()
+                        
+                with col_btn3:
+                    if st.button("ลบบัญชีทิ้ง 🗑️"):
+                        del st.session_state.users_db[target_user]
+                        st.warning(f"ลบบัญชี {target_user} เรียบร้อย")
+                        st.rerun()
+            else:
+                st.info("ยังไม่มี User อื่นในระบบให้จัดการ (สร้างเพิ่มได้ที่ช่องซ้ายมือ)")
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ----------------------------------------------------
@@ -370,7 +434,6 @@ df_filtered = df_sim[(df_sim["date"].dt.date >= start_d) & (df_sim["date"].dt.da
 past_14d_rain = df_weather_history.iloc[-14:]["rain_mm"].sum()
 is_drought = (past_14d_rain < 20.0) or (live_soil < 0.20)
 
-# ส่วนหัวหลัก พร้อมปุ่มอัปเดตข้อมูล Real-Time ชัดเจน
 head_col1, head_col2 = st.columns([3, 1])
 
 with head_col1:
@@ -398,7 +461,7 @@ with head_col2:
         <div style="font-size: 0.8rem; color: #93c5fd; margin-bottom: 6px;">ระบบขัดข้อง/ข้อมูลไม่อัปเดต?</div>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("🔄 อัปเดตข้อมูล REAL-TIME เดี๋ยวนี้", type="primary", use_container_width=True):
+    if st.button("🔄 อัปเดตข้อมูล REAL-TIME เดี๋ยวนี้", type="primary", width="stretch"):
         st.cache_data.clear()
         st.toast("ซิงค์ข้อมูลดาวเทียมและตลาดโลกเรียลไทม์สำเร็จแล้ว!", icon="✅")
         st.rerun()
